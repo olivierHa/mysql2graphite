@@ -36,7 +36,7 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
     logger.setLevel(loglevel)
     ch = logging.StreamHandler()
     ch.setLevel(loglevel)
-    fmtr = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fmtr = logging.Formatter('%(levelname)s - %(message)s')
     ch.setFormatter(fmtr)
     logger.addHandler(ch)
 
@@ -48,7 +48,7 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
                                     passwd=mysql_password)
     except MySQLdb.Error, e:
         logger.error("MySQL Module: Error %d: %s" % (e.args[0], e.args[1]))
-        exit(1)
+        exit(2)
     cursor = con_mysql.cursor(MySQLdb.cursors.DictCursor)
     logger.debug("Connection to Mysql successful")
 
@@ -58,7 +58,7 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
         con_carbon.connect((carbon_server, int(carbon_port)))
     except IOError:
         logger.error("Error connecting to carbon server %s" % carbon_server)
-        exit(1)
+        exit(2)
     logger.debug("Connection to Carbon successful")
 
     # Mysql and Carbon connection are OK
@@ -94,7 +94,7 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
     packet = header + payload
     # Fire !
     con_carbon.sendall(packet)
-    logger.debug("Sending finished")
+    print("OK %s lines have been sent to Graphite" % len(data_t_s))
 
 if __name__ == "__main__":
 
