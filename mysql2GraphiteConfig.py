@@ -9,7 +9,7 @@
 import logging
 
 config = [
-               {'request' : 'SELECT table_schema AS database_name , table_name AS table_name ,table_rows rows, data_length data_length, index_length idx_length, data_length+index_length total_size, round(index_length/data_length,2) idxfrac FROM information_schema.TABLES ORDER BY table_schema DESC ;', 
+               {'request' : 'SELECT table_schema AS database_name , table_name AS table_name ,table_rows rows, data_length data_length, index_length idx_length, data_length+index_length total_size, round(index_length/data_length,2) idxfrac FROM information_schema.TABLES where table_schema != "information_schema" ORDER BY table_schema DESC ;', 
                 'key' : ['database_name','table_name'],
                 'value' : ['rows','data_length', 'idx_length','total_size', 'idxfrac']
               },
