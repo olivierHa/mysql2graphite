@@ -18,6 +18,7 @@
 #   along with this program; if not, write to the Free Software
 #   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+import sys
 import MySQLdb
 import datetime
 import time
@@ -25,9 +26,12 @@ import cPickle
 import struct
 import argparse
 import logging
-from socket import socket
-from mysql2GraphiteConfig import config, carbon_server, carbon_port, loglevel
+import socket
+from mysql2GraphiteConfig import config, carbon_server, carbon_port, loglevel, pickle_max_items_per_packet
 
+def get_slices_to_send(buffer):
+    for i in xrange(0, len(buffer), pickle_max_items_per_packet):
+        yield buffer[i:i + pickle_max_items_per_packet]
 
 def main(mysql_server, mysql_user, mysql_password, carbon_server):
 
@@ -53,7 +57,7 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
     logger.debug("Connection to Mysql successful")
 
     logger.debug("Try to open a Carbon  connection to %s" % carbon_server)
-    con_carbon = socket()
+    con_carbon = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         con_carbon.connect((carbon_server, int(carbon_port)))
     except IOError:
@@ -78,9 +82,9 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
         for row in result_set:
             for v in r['value']:
                 if isinstance(r['key'], list):
-                    metricName = 'mysql.' + mysql_server + '.' + '.'.join(row[i] for i in r['key']) + '.' + v
+                    metricName = r['metric_prefix'] + '.' + mysql_server + '.' + r['metrictype'] + '.' + '.'.join(row[i] for i in r['key']) + '.' + v
                 else:
-                    metricName = 'mysql.' + mysql_server + '.' + r['key'] + '.' + v
+                    metricName = r['metric_prefix'] + '.' + mysql_server + '.' + r['metrictype'] + '.' + r['key'] + '.' + v
                 # [(path, (timestamp, value)), ...]
                 data_t_s.append(("%s" % (metricName), ("%d" % time_s, "%s" % str(row[v]))))
 
@@ -88,12 +92,21 @@ def main(mysql_server, mysql_user, mysql_password, carbon_server):
     con_mysql.close()
 
     logger.debug("Sending data to graphite %s" % data_t_s)
-    # Format the data
-    payload = cPickle.dumps(data_t_s)
-    header = struct.pack("!L", len(payload))
-    packet = header + payload
-    # Fire !
-    con_carbon.sendall(packet)
+
+    # Split buffer and send
+    for ts in get_slices_to_send(data_t_s):
+
+        # Format the data
+        payload = cPickle.dumps(ts,protocol=-1)
+        header = struct.pack("!L", len(payload))
+        packet = header + payload
+        logger.debug("Packet size : %s - Nb of lines : %s " % (sys.getsizeof(packet),len(ts)))
+        try:
+            con_carbon.sendall(packet)
+        except:
+            logger.error("Error sending data to carbon server")
+            exit(2)
+
     print("OK %s lines have been sent to Graphite" % len(data_t_s))
 
 if __name__ == "__main__":
